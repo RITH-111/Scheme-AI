@@ -50,7 +50,7 @@ export function InputArea({ onSendMessage, isLoading, onStop, onResume }: InputA
   }
 
   return (
-    <div className="border-t border-border bg-background p-4 sm:p-6">
+    <div className="border-t border-border bg-background/80 p-4 sm:p-6 backdrop-blur">
       <div className="max-w-4xl mx-auto space-y-4">
         {/* Input Box */}
         <div className="flex gap-3 items-end">
@@ -61,7 +61,7 @@ export function InputArea({ onSendMessage, isLoading, onStop, onResume }: InputA
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about schemes, check eligibility, or get guidance..."
-              className="w-full bg-input border border-border rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-accent/50 text-foreground placeholder:text-muted-foreground"
+              className="w-full bg-input border border-border rounded-2xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-accent/50 text-foreground placeholder:text-muted-foreground shadow-sm"
               rows={1}
               disabled={isLoading}
             />
@@ -71,7 +71,7 @@ export function InputArea({ onSendMessage, isLoading, onStop, onResume }: InputA
           <Button
             onClick={handleSendMessage}
             disabled={isLoading || !message.trim()}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-auto py-3"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-auto py-3 rounded-full px-5"
           >
             <Send className="w-4 h-4" />
             <span className="hidden sm:inline">Send</span>

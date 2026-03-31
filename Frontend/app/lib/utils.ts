@@ -27,6 +27,37 @@ export function generateId(): string {
   return Math.random().toString(36).substr(2, 9)
 }
 
+export function getOrCreateUserId(): string {
+  if (typeof window === 'undefined') return 'anonymous'
+  const key = 'scheme_ai_user_id'
+  const existing = localStorage.getItem(key)
+  if (existing) return existing
+  const newId =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `user_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  localStorage.setItem(key, newId)
+  return newId
+}
+
+export function getStoredProfile(): Record<string, unknown> {
+  if (typeof window === 'undefined') return {}
+  const key = 'scheme_ai_profile'
+  const stored = localStorage.getItem(key)
+  if (!stored) return {}
+  try {
+    return JSON.parse(stored) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
+export function setStoredProfile(profile: Record<string, unknown>): void {
+  if (typeof window === 'undefined') return
+  const key = 'scheme_ai_profile'
+  localStorage.setItem(key, JSON.stringify(profile))
+}
+
 export function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -45,12 +76,12 @@ export function getEligibilityBgColor(percentage: number): string {
 
 export function getCategoryColor(category: string): { bg: string; text: string } {
   const colors: Record<string, { bg: string; text: string }> = {
-    education: { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400' },
-    health: { bg: 'bg-green-500/10', text: 'text-green-600 dark:text-green-400' },
-    employment: { bg: 'bg-purple-500/10', text: 'text-purple-600 dark:text-purple-400' },
-    welfare: { bg: 'bg-pink-500/10', text: 'text-pink-600 dark:text-pink-400' },
-    agricultural: { bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400' },
-    infrastructure: { bg: 'bg-cyan-500/10', text: 'text-cyan-600 dark:text-cyan-400' },
+    education: { bg: 'bg-sky-500/10', text: 'text-sky-700 dark:text-sky-300' },
+    health: { bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300' },
+    employment: { bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-300' },
+    welfare: { bg: 'bg-rose-500/10', text: 'text-rose-700 dark:text-rose-300' },
+    agricultural: { bg: 'bg-lime-500/10', text: 'text-lime-700 dark:text-lime-300' },
+    infrastructure: { bg: 'bg-teal-500/10', text: 'text-teal-700 dark:text-teal-300' },
   }
   return colors[category] || colors.education
 }

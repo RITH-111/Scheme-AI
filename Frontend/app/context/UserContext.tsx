@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { getOrCreateUserId } from '@/app/lib/utils'
 
 export type Persona = 'student' | 'senior-citizen' | 'farmer' | 'entrepreneur' | 'unemployed' | 'disabled'
 
@@ -10,7 +11,9 @@ export interface User {
   persona: Persona | null
   email?: string
   phone?: string
+  profile?: Record<string, unknown>
   isAuthenticated: boolean
+  authMode?: 'signin' | 'signup'
 }
 
 interface UserContextType {
@@ -24,7 +27,7 @@ const UserContext = createContext<UserContextType | undefined>(undefined)
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User>({
-    id: '',
+    id: getOrCreateUserId(),
     name: '',
     persona: null,
     isAuthenticated: false,
@@ -35,7 +38,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const savedUser = localStorage.getItem('scheme_user')
     if (savedUser) {
       try {
-        setUser(JSON.parse(savedUser))
+        const parsed = JSON.parse(savedUser) as User
+        setUser(prev => ({
+          ...prev,
+          ...parsed,
+          id: parsed.id || prev.id || getOrCreateUserId(),
+        }))
       } catch (e) {
         console.error('Failed to parse user data:', e)
       }
@@ -48,7 +56,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [user])
 
   const handleSetUser = (newUser: User) => {
-    setUser(newUser)
+    setUser(prev => ({
+      ...prev,
+      ...newUser,
+      id: newUser.id || prev.id || getOrCreateUserId(),
+    }))
   }
 
   const handleSetPersona = (persona: Persona) => {
@@ -64,6 +76,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
     setUser(emptyUser)
     localStorage.removeItem('scheme_user')
+    localStorage.removeItem('scheme_ai_profile')
   }
 
   return (

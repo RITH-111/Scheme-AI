@@ -1,14 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { loginSchema, signupSchema, type LoginInput, type SignupInput } from '@/app/lib/validators'
+import { useUser } from '@/app/context/UserContext'
+import { sendOtp, signInWithOtp, signUpWithOtp } from '@/app/lib/mockApi'
+import { setStoredProfile } from '@/app/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useUser } from '@/app/context/UserContext'
-import { Eye, EyeOff, Phone, Mail } from 'lucide-react'
+import { Chrome } from 'lucide-react'
 
 interface AuthFormProps {
   type: 'login' | 'signup'
@@ -17,297 +16,204 @@ interface AuthFormProps {
 export function AuthForm({ type }: AuthFormProps) {
   const router = useRouter()
   const { setUser } = useUser()
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email')
-  const [otpSent, setOtpSent] = useState(false)
+
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [retryAfter, setRetryAfter] = useState(0)
 
-  const schema = type === 'login' ? loginSchema : signupSchema
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    watch,
-  } = useForm({
-    resolver: zodResolver(schema),
-  })
+  const purpose = type === 'login' ? 'signin' : 'signup'
 
-  const onSubmit = async (data: LoginInput | SignupInput) => {
+  const canRequestOtp = name.trim() && email.trim() && phone.trim()
+  const canVerify = canRequestOtp && otp.trim().length === 6
+
+  useEffect(() => {
+    if (!retryAfter) return
+    const timer = window.setInterval(() => {
+      setRetryAfter(prev => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [retryAfter])
+
+  useEffect(() => {
+    if (!otpSent || typeof window === 'undefined') return
+    const supportsOtpApi = 'OTPCredential' in window
+    if (!supportsOtpApi) return
+
+    const ac = new AbortController()
+    navigator.credentials
+      .get({ otp: { transport: ['sms'] }, signal: ac.signal } as CredentialRequestOptions)
+      .then(credential => {
+        const code = (credential as { code?: string } | null)?.code
+        if (code) {
+          setOtp(code.slice(0, 6))
+        }
+      })
+      .catch(() => {
+        // Silent fallback for browsers/devices that reject auto OTP retrieval.
+      })
+    return () => ac.abort()
+  }, [otpSent])
+
+  const requestOtp = async () => {
+    if (!canRequestOtp) {
+      setStatusMessage({ type: 'error', text: 'Please enter name, email, and phone number.' })
+      return
+    }
+
     setIsLoading(true)
+    setStatusMessage(null)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const result = await sendOtp({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        purpose,
+      })
 
-      // Mock user creation/authentication
-      const userId = Math.random().toString(36).substr(2, 9)
-      const user = {
-        id: userId,
-        name: type === 'signup' ? (data as SignupInput).name : 'User',
-        email: data.email,
-        phone: type === 'signup' ? (data as SignupInput).phone : undefined,
-        persona: null,
-        isAuthenticated: true,
+      if (!result) {
+        setStatusMessage({ type: 'error', text: 'Failed to send OTP. Please check backend and try again.' })
+        return
       }
 
-      setUser(user)
-      router.push('/persona')
-    } catch (error) {
-      console.error('Auth error:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleSendOTP = async () => {
-    if (!phoneNumber.trim()) return
-    
-    setIsLoading(true)
-    try {
-      // Simulate API call for sending OTP
-      await new Promise(resolve => setTimeout(resolve, 800))
       setOtpSent(true)
-    } catch (error) {
-      console.error('OTP send error:', error)
+      setRetryAfter(30)
+      const devHint = result.dev_otp ? ` (Dev OTP: ${result.dev_otp})` : ''
+      setStatusMessage({ type: 'success', text: `${result.message}${devHint}` })
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleVerifyOTP = async () => {
-    if (!otp.trim() || otp.length !== 6) return
-    
-    setIsLoading(true)
-    try {
-      // Simulate API call for verifying OTP
-      await new Promise(resolve => setTimeout(resolve, 800))
+  const verifyOtp = async () => {
+    if (!canVerify) {
+      setStatusMessage({ type: 'error', text: 'Please enter a valid 6-digit OTP.' })
+      return
+    }
 
-      // Mock user creation/authentication
-      const userId = Math.random().toString(36).substr(2, 9)
-      const user = {
-        id: userId,
-        name: 'User',
-        email: `user${userId}@example.com`,
-        phone: phoneNumber,
-        persona: null,
-        isAuthenticated: true,
+    setIsLoading(true)
+    setStatusMessage(null)
+    try {
+      const payload = {
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        otp: otp.trim(),
       }
 
-      setUser(user)
-      router.push('/persona')
-    } catch (error) {
-      console.error('OTP verification error:', error)
+      const response = type === 'login' ? await signInWithOtp(payload) : await signUpWithOtp(payload)
+      if (!response) {
+        setStatusMessage({ type: 'error', text: 'Invalid or expired OTP. Please try again.' })
+        return
+      }
+
+      setUser({
+        id: response.user_id,
+        name: response.name,
+        email: response.email,
+        phone: response.phone,
+        persona: (response.persona as any) || null,
+        profile: response.profile || {},
+        isAuthenticated: true,
+        authMode: type === 'login' ? 'signin' : 'signup',
+      })
+
+      setStoredProfile(response.profile || {})
+      setStatusMessage({ type: 'success', text: response.message })
+      setTimeout(() => {
+        router.push('/chat')
+      }, 600)
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Show OTP form for login if using phone method
-  if (type === 'login' && authMethod === 'phone') {
-    return (
-      <div className="w-full space-y-4">
-        <div className="flex gap-2 mb-4">
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMethod('email')
-              setOtpSent(false)
-              setOtp('')
-              setPhoneNumber('')
-            }}
-            className="flex-1 p-2 rounded-lg border border-border hover:bg-accent/10 flex items-center justify-center gap-2 text-sm font-medium"
-          >
-            <Mail className="w-4 h-4" />
-            Email & Password
-          </button>
-          <button
-            type="button"
-            disabled
-            className="flex-1 p-2 rounded-lg bg-accent/20 border border-accent flex items-center justify-center gap-2 text-sm font-medium text-accent-foreground"
-          >
-            <Phone className="w-4 h-4" />
-            Phone OTP
-          </button>
-        </div>
-
-        {!otpSent ? (
-          <>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-foreground">Phone Number</label>
-              <Input
-                type="tel"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="+91 9876543210"
-                className="w-full"
-              />
-            </div>
-
-            <Button
-              type="button"
-              onClick={handleSendOTP}
-              disabled={isLoading || !phoneNumber.trim()}
-              className="w-full bg-primary hover:bg-primary/90"
-            >
-              {isLoading ? 'Sending...' : 'Send OTP'}
-            </Button>
-          </>
-        ) : (
-          <>
-            <div className="p-3 rounded-lg bg-accent/5 border border-accent/20">
-              <p className="text-sm text-foreground/70">OTP sent to {phoneNumber}</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2 text-foreground">Enter OTP</label>
-              <Input
-                type="text"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="000000"
-                maxLength={6}
-                className="w-full text-center text-xl tracking-widest"
-              />
-              <p className="text-xs text-foreground/50 mt-1">Enter the 6-digit code sent to your phone</p>
-            </div>
-
-            <Button
-              type="button"
-              onClick={handleVerifyOTP}
-              disabled={isLoading || otp.length !== 6}
-              className="w-full bg-primary hover:bg-primary/90"
-            >
-              {isLoading ? 'Verifying...' : 'Verify OTP'}
-            </Button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setOtpSent(false)
-                setOtp('')
-              }}
-              className="w-full p-2 text-sm text-accent hover:text-accent/80 font-medium"
-            >
-              Send OTP again
-            </button>
-          </>
-        )}
-      </div>
-    )
+  const handleGoogleSignIn = () => {
+    setStatusMessage({
+      type: 'info',
+      text: 'Google sign-in UI is ready. Connect Google auth provider to activate it.',
+    })
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="w-full space-y-4">
-      {/* Auth method toggle for login */}
-      {type === 'login' && (
-        <div className="flex gap-2 mb-4">
-          <button
-            type="button"
-            onClick={() => setAuthMethod('email')}
-            disabled={authMethod === 'email'}
-            className={`flex-1 p-2 rounded-lg border flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
-              authMethod === 'email'
-                ? 'bg-accent/20 border-accent text-accent-foreground'
-                : 'border-border hover:bg-accent/10'
-            }`}
-          >
-            <Mail className="w-4 h-4" />
-            Email & Password
-          </button>
-          <button
-            type="button"
-            onClick={() => setAuthMethod('phone')}
-            disabled={authMethod === 'phone'}
-            className={`flex-1 p-2 rounded-lg border flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
-              authMethod === 'phone'
-                ? 'bg-accent/20 border-accent text-accent-foreground'
-                : 'border-border hover:bg-accent/10'
-            }`}
-          >
-            <Phone className="w-4 h-4" />
-            Phone OTP
-          </button>
-        </div>
-      )}
-
-      {type === 'signup' && (
-        <div>
-          <label className="block text-sm font-medium mb-2 text-foreground">Full Name</label>
-          <Input
-            {...register('name')}
-            placeholder="John Doe"
-            className="w-full"
-          />
-          {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
-        </div>
-      )}
+    <div className="w-full space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-2 text-foreground">Name</label>
+        <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Your full name" />
+      </div>
 
       <div>
         <label className="block text-sm font-medium mb-2 text-foreground">Email</label>
-        <Input
-          {...register('email')}
-          type="email"
-          placeholder="you@example.com"
-          className="w-full"
-        />
-        {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}
+        <Input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="you@example.com" />
       </div>
-
-      {type === 'signup' && (
-        <div>
-          <label className="block text-sm font-medium mb-2 text-foreground">Phone</label>
-          <Input
-            {...register('phone')}
-            placeholder="9876543210"
-            className="w-full"
-          />
-          {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>}
-        </div>
-      )}
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-foreground">Password</label>
-        <div className="relative">
-          <Input
-            {...register('password')}
-            type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
-            className="w-full pr-10"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2"
-          >
-            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
-        {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>}
+        <label className="block text-sm font-medium mb-2 text-foreground">Phone Number</label>
+        <Input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="9876543210" />
       </div>
 
-      {type === 'signup' && (
+      {otpSent && (
         <div>
-          <label className="block text-sm font-medium mb-2 text-foreground">Confirm Password</label>
+          <label className="block text-sm font-medium mb-2 text-foreground">OTP</label>
           <Input
-            {...register('confirmPassword')}
-            type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
-            className="w-full"
+            value={otp}
+            onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            type="text"
+            maxLength={6}
+            placeholder="Enter 6-digit OTP"
+            className="tracking-widest"
           />
-          {errors.confirmPassword && (
-            <p className="text-red-500 text-sm mt-1">{errors.confirmPassword.message}</p>
-          )}
         </div>
       )}
 
       <Button
-        type="submit"
-        disabled={isLoading}
-        className="w-full bg-primary hover:bg-primary/90"
+        onClick={handleGoogleSignIn}
+        type="button"
+        variant="outline"
+        className="w-full rounded-full border-border hover:bg-accent/10"
       >
-        {isLoading ? 'Loading...' : type === 'login' ? 'Sign In' : 'Create Account'}
+        <Chrome className="mr-2 h-4 w-4" />
+        Continue with Google
       </Button>
-    </form>
+
+      {!otpSent ? (
+        <Button onClick={requestOtp} disabled={isLoading || !canRequestOtp} className="w-full bg-primary hover:bg-primary/90 rounded-full">
+          {isLoading ? 'Sending OTP...' : 'Send OTP'}
+        </Button>
+      ) : (
+        <div className="space-y-2">
+          <Button onClick={verifyOtp} disabled={isLoading || !canVerify} className="w-full bg-primary hover:bg-primary/90 rounded-full">
+            {isLoading ? 'Verifying...' : type === 'login' ? 'Sign In' : 'Register'}
+          </Button>
+          <Button
+            onClick={requestOtp}
+            type="button"
+            variant="outline"
+            disabled={isLoading || !canRequestOtp || retryAfter > 0}
+            className="w-full rounded-full"
+          >
+            {retryAfter > 0 ? `Retry in ${retryAfter}s` : 'Resend OTP'}
+          </Button>
+        </div>
+      )}
+
+      {statusMessage && (
+        <p
+          className={`text-sm rounded-xl border px-3 py-2 ${
+            statusMessage.type === 'error'
+              ? 'border-destructive/50 bg-destructive/10 text-destructive'
+              : statusMessage.type === 'success'
+                ? 'border-emerald-600/40 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300'
+                : 'border-border bg-background/70 text-muted-foreground'
+          }`}
+        >
+          {statusMessage.text}
+        </p>
+      )}
+    </div>
   )
 }

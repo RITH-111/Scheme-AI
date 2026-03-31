@@ -9,26 +9,28 @@ export function NavBar() {
   const { isDark, toggleTheme } = useTheme()
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/95 backdrop-blur">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/75 backdrop-blur-xl">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl text-primary">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold">
-            S
+        <Link href="/" className="flex items-center gap-3 font-semibold text-xl tracking-tight text-foreground">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary font-bold">
+            SG
           </div>
-          Scheme AI
+          <span className="hidden sm:inline">Scheme AI</span>
         </Link>
 
-        {/* Right section */}
-        <div className="flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-2 rounded-full border border-border bg-card/70 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Landing → Auth → Discovery → Eligibility → Guidance
+        </div>
+
+        <div className="flex items-center gap-3">
           <Link href="/auth">
-            <Button variant="ghost" className="text-foreground hover:bg-accent/10">
-              Sign In
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-5">
+              Get Started
             </Button>
           </Link>
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg border border-border hover:bg-accent/10 transition-colors"
+            className="p-2 rounded-full border border-border hover:bg-accent/10 transition-colors"
             aria-label="Toggle theme"
           >
             {isDark ? (

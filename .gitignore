@@ -1,0 +1,55 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Python (Backend)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+
+# Backend runtime/data artifacts
+Backend/chroma_storage/
+chroma_storage/
+*.sqlite3
+
+# Node / Next.js (Frontend)
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+
+# Vercel / sandbox artifacts
+.vercel/
+.snowflake/
+.v0-trash/
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+next.user-config.*

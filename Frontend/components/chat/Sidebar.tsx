@@ -38,8 +38,8 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const { isDark, toggleTheme } = useTheme()
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null)
 
-  const handleNewChat = () => {
-    createNewChat()
+  const handleNewChat = async () => {
+    await createNewChat()
     router.push('/chat')
   }
 
@@ -60,21 +60,24 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border z-50 flex flex-col transition-transform ${
+        className={`fixed left-0 top-0 h-screen w-72 bg-sidebar border-r border-sidebar-border z-50 flex flex-col transition-transform ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Header */}
-        <div className="border-b border-sidebar-border p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-sidebar-foreground">
-            <div className="w-8 h-8 rounded-lg bg-sidebar-primary/10 flex items-center justify-center text-sidebar-primary text-xs font-bold">
-              S
+        <div className="border-b border-sidebar-border p-5 flex items-center justify-between">
+          <div className="flex items-center gap-3 font-semibold text-sidebar-foreground">
+            <div className="w-9 h-9 rounded-xl bg-sidebar-primary/10 border border-sidebar-primary/20 flex items-center justify-center text-sidebar-primary text-xs font-bold">
+              SA
             </div>
-            <span className="hidden sm:inline">Scheme AI</span>
+            <div className="leading-tight">
+              <p className="text-sm">Scheme AI</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/60">Assistant</p>
+            </div>
           </div>
           <button 
             onClick={onToggle} 
-            className="p-2 hover:bg-sidebar-accent/10 rounded-lg transition-colors text-sidebar-foreground"
+            className="p-2 hover:bg-sidebar-accent/10 rounded-full transition-colors text-sidebar-foreground"
             title={isOpen ? "Hide sidebar" : "Show sidebar"}
           >
             <ChevronDown className="w-4 h-4 transform transition-transform" style={{
@@ -84,10 +87,10 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </div>
 
         {/* New Chat Button */}
-        <div className="p-4">
+        <div className="p-5">
           <Button
             onClick={handleNewChat}
-            className="w-full bg-sidebar-primary hover:bg-sidebar-primary/90 text-sidebar-primary-foreground gap-2"
+            className="w-full bg-sidebar-primary hover:bg-sidebar-primary/90 text-sidebar-primary-foreground gap-2 rounded-full"
           >
             <Plus className="w-4 h-4" />
             New Chat
@@ -95,8 +98,8 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </div>
 
         {/* Chat History */}
-        <div className="flex-1 px-4 overflow-hidden flex flex-col">
-          <p className="text-xs font-semibold text-sidebar-foreground/60 uppercase mb-3">Chat History</p>
+        <div className="flex-1 px-5 overflow-hidden flex flex-col">
+          <p className="text-[10px] font-semibold text-sidebar-foreground/60 uppercase tracking-[0.2em] mb-3">Chat History</p>
           <ScrollArea className="flex-1">
             <div className="space-y-2 pr-4">
               {chatHistory.length === 0 ? (
@@ -107,7 +110,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                     key={chat.id}
                     onMouseEnter={() => setHoveredChatId(chat.id)}
                     onMouseLeave={() => setHoveredChatId(null)}
-                    className={`group p-3 rounded-lg cursor-pointer transition-colors ${
+                    className={`group p-3 rounded-2xl cursor-pointer transition-colors ${
                       currentChat?.id === chat.id
                         ? 'bg-sidebar-accent/20 border border-sidebar-accent'
                         : 'hover:bg-sidebar-accent/10'
@@ -147,11 +150,11 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-sidebar-border p-4 space-y-2">
+        <div className="border-t border-sidebar-border p-5 space-y-3">
           {/* User Info */}
-          <div className="px-2 py-2 rounded-lg bg-sidebar-accent/5">
-            <p className="text-xs font-medium text-sidebar-foreground/60">Logged in as</p>
-            <p className="text-sm font-semibold text-sidebar-foreground truncate">
+          <div className="px-3 py-3 rounded-2xl bg-sidebar-accent/5 border border-sidebar-border">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/60">Logged in as</p>
+            <p className="text-sm font-semibold text-sidebar-foreground truncate mt-1">
               {user.name || 'User'}
             </p>
           </div>
@@ -160,7 +163,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           <div className="flex gap-2">
             <button
               onClick={toggleTheme}
-              className="flex-1 p-2 rounded-lg border border-sidebar-border hover:bg-sidebar-accent/10 transition-colors flex items-center justify-center gap-2"
+              className="flex-1 p-2 rounded-full border border-sidebar-border hover:bg-sidebar-accent/10 transition-colors flex items-center justify-center gap-2"
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               <span className="text-xs font-medium">{isDark ? 'Light' : 'Dark'}</span>
@@ -169,7 +172,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             {/* Settings dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex-1 p-2 rounded-lg border border-sidebar-border hover:bg-sidebar-accent/10 transition-colors flex items-center justify-center">
+                <button className="flex-1 p-2 rounded-full border border-sidebar-border hover:bg-sidebar-accent/10 transition-colors flex items-center justify-center">
                   <Settings className="w-4 h-4" />
                 </button>
               </DropdownMenuTrigger>

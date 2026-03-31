@@ -1,0 +1,11 @@
+chromadb
+sentence-transformers
+langchain
+tqdm
+fastapi
+uvicorn
+psycopg2-binary
+langchain-core
+langchain-ollama
+pytest
+python-dotenv

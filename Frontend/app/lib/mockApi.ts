@@ -1,4 +1,7 @@
+'use client'
+
 import { Persona } from '@/app/context/UserContext'
+import { getOrCreateUserId } from '@/app/lib/utils'
 
 export interface Scheme {
   id: string
@@ -8,6 +11,14 @@ export interface Scheme {
   benefits: string[]
   category: 'education' | 'health' | 'employment' | 'welfare' | 'agricultural' | 'infrastructure'
   matchPercentage?: number
+  why_recommended?: string[]
+  eligibility_breakdown?: {
+    status?: string
+    score?: number
+    checked_criteria?: string[]
+  }
+  confidence?: number
+  raw?: Record<string, unknown>
 }
 
 export interface EligibilityQuestion {
@@ -21,245 +32,210 @@ export interface GuidanceStep {
   id: string
   title: string
   description: string
-  action: string
+  status?: 'done' | 'pending' | 'blocked'
+  action?: string
   resources?: string[]
 }
 
-// Mock schemes database
-const mockSchemes: Scheme[] = [
-  {
-    id: 'scheme-1',
-    name: 'Higher Education Scholarship',
-    description: 'Financial aid for higher education pursuits',
-    eligibility: ['Annual income < 8 LPA', 'Minimum 60% in 12th', 'Indian citizen'],
-    benefits: ['Tuition fee coverage', '₹50,000 annual stipend', 'Merit bonus up to ₹1 lakh'],
-    category: 'education',
-  },
-  {
-    id: 'scheme-2',
-    name: 'Startup India Fund',
-    description: 'Subsidized loans and grants for new businesses',
-    eligibility: ['Business < 5 years old', 'Indian citizen', 'Minimum ₹50,000 investment'],
-    benefits: ['₹10 lakh to ₹1 crore loans at 5% interest', 'GST registration support', 'Market access help'],
-    category: 'employment',
-  },
-  {
-    id: 'scheme-3',
-    name: 'Senior Citizen Health Insurance',
-    description: 'Comprehensive health coverage for seniors (60+)',
-    eligibility: ['Age 60 or above', 'Indian resident', 'No age limit for enrollment'],
-    benefits: ['₹5 lakh annual coverage', 'Cashless hospitalization', 'Critical illness coverage'],
-    category: 'health',
-  },
-  {
-    id: 'scheme-4',
-    name: 'Pradhan Mantri Kisan Samman Nidhi',
-    description: 'Income support program for farmers',
-    eligibility: ['Farmer with landholding ≤ 2 hectares', 'Indian citizen', 'Age > 18'],
-    benefits: ['₹6,000 annual support', 'Paid in 3 installments', 'Direct bank transfer'],
-    category: 'agricultural',
-  },
-  {
-    id: 'scheme-5',
-    name: 'Disability Allowance Scheme',
-    description: 'Financial assistance for persons with disabilities',
-    eligibility: ['Disability of 40% or more', 'Indian citizen', 'Below poverty line'],
-    benefits: ['₹1,000-₹2,000 monthly', 'Medical care reimbursement', 'Accessibility aids support'],
-    category: 'welfare',
-  },
-  {
-    id: 'scheme-6',
-    name: 'PMAY - Affordable Housing',
-    description: 'Housing loans at subsidized rates',
-    eligibility: ['First-time homebuyer', 'Annual income < 12 LPA', 'Indian citizen'],
-    benefits: ['Reduced interest rates 3.5-4%', 'Credit-linked subsidy up to ₹2.67 lakh', 'Easy EMI options'],
-    category: 'infrastructure',
-  },
-]
+export interface SchemeOverview {
+  name: string
+  objective: string
+  benefits: string[]
+  eligibilitySummary: string[]
+  targetGroup: string
+  applicationMode: string
+  officialUrl?: string
+}
 
-// Simulate API delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+export interface GuidancePayload {
+  steps: GuidanceStep[]
+  blockers?: string[]
+  required_documents?: string[]
+  authority?: string
+  application_url?: string
+  timeline?: string
+}
 
-export async function fetchSchemesByPersona(persona: Persona): Promise<Scheme[]> {
-  await delay(500)
+export interface ChatApiResponse {
+  session_id: string
+  assistant_message: string
+  recommended_schemes?: Scheme[]
+  selected_scheme?: Scheme
+  eligibility_result?: Record<string, unknown>
+  scheme_overview?: SchemeOverview
+  guidance?: GuidancePayload
+}
 
-  const personaSchemeMap: Record<Persona, Scheme[]> = {
-    student: [mockSchemes[0], mockSchemes[2]],
-    entrepreneur: [mockSchemes[1]],
-    'senior-citizen': [mockSchemes[2], mockSchemes[4]],
-    farmer: [mockSchemes[3]],
-    unemployed: [mockSchemes[1], mockSchemes[5]],
-    disabled: [mockSchemes[4], mockSchemes[5]],
+export interface SessionResponse {
+  session_id: string
+  user_id: string
+  created_at: string
+  updated_at: string
+  memory: Record<string, unknown>
+}
+
+export interface OtpSendResponse {
+  phone: string
+  message: string
+  dev_otp?: string
+}
+
+export interface AuthResponse {
+  user_id: string
+  name: string
+  email: string
+  phone: string
+  message: string
+  persona?: string | null
+  profile?: Record<string, unknown>
+}
+
+export interface ReadyResponse {
+  status: string
+  checks: Record<string, string>
+}
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000'
+
+async function safeFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
+  try {
+    const userId = getOrCreateUserId()
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+        ...(init?.headers || {}),
+      },
+      cache: 'no-store',
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    return (await response.json()) as T
+  } catch (error) {
+    console.warn('API request failed:', error)
+    return null
   }
-
-  return (personaSchemeMap[persona] || []).map(scheme => ({
-    ...scheme,
-    matchPercentage: 70 + Math.random() * 30, // 70-100% match
-  }))
 }
 
-export async function fetchAllSchemes(): Promise<Scheme[]> {
-  await delay(300)
-  return mockSchemes
+export async function createSession(): Promise<SessionResponse | null> {
+  const userId = getOrCreateUserId()
+  return safeFetch<SessionResponse>('/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  })
 }
 
-export async function fetchSchemeById(id: string): Promise<Scheme | null> {
-  await delay(200)
-  return mockSchemes.find(s => s.id === id) || null
+export async function getSession(sessionId: string): Promise<SessionResponse | null> {
+  return safeFetch<SessionResponse>(`/sessions/${sessionId}`, {
+    method: 'GET',
+  })
+}
+
+export async function deleteSession(sessionId: string): Promise<boolean> {
+  const data = await safeFetch<{ deleted: boolean }>(`/sessions/${sessionId}`, {
+    method: 'DELETE',
+  })
+  return Boolean(data?.deleted)
+}
+
+export async function fetchSchemesByPersona(persona: Persona, limit = 6): Promise<Scheme[]> {
+  const data = await safeFetch<{ schemes: Scheme[] }>('/schemes/by-persona', {
+    method: 'POST',
+    body: JSON.stringify({ persona, limit }),
+  })
+  return data?.schemes || []
 }
 
 export async function fetchEligibilityQuestions(schemeId: string): Promise<EligibilityQuestion[]> {
-  await delay(400)
-
-  const questionSets: Record<string, EligibilityQuestion[]> = {
-    'scheme-1': [
-      {
-        id: 'q1',
-        question: 'What is your annual family income?',
-        type: 'text',
-      },
-      {
-        id: 'q2',
-        question: 'What was your percentage in 12th grade?',
-        type: 'text',
-      },
-      {
-        id: 'q3',
-        question: 'Are you an Indian citizen?',
-        type: 'yes-no',
-      },
-    ],
-    'scheme-2': [
-      {
-        id: 'q1',
-        question: 'How long has your business been operating?',
-        type: 'text',
-      },
-      {
-        id: 'q2',
-        question: 'What is your initial investment amount?',
-        type: 'text',
-      },
-      {
-        id: 'q3',
-        question: 'Is your business registered?',
-        type: 'yes-no',
-      },
-    ],
-    'scheme-4': [
-      {
-        id: 'q1',
-        question: 'What is your landholding size (in hectares)?',
-        type: 'text',
-      },
-      {
-        id: 'q2',
-        question: 'Do you have land ownership documents?',
-        type: 'yes-no',
-      },
-    ],
-  }
-
-  return questionSets[schemeId] || []
+  const data = await safeFetch<{ questions: EligibilityQuestion[] }>(`/schemes/${schemeId}/eligibility-questions`, {
+    method: 'GET',
+  })
+  return data?.questions || []
 }
 
-export async function fetchGuidanceSteps(schemeId: string): Promise<GuidanceStep[]> {
-  await delay(400)
-
-  const guidanceMap: Record<string, GuidanceStep[]> = {
-    'scheme-1': [
-      {
-        id: 'step1',
-        title: 'Check Eligibility',
-        description: 'Verify your educational background and income criteria',
-        action: 'Visit official website and check eligibility calculator',
-        resources: ['Eligibility Checker', 'Income Certificate'],
-      },
-      {
-        id: 'step2',
-        title: 'Prepare Documents',
-        description: 'Gather required certificates and income proof',
-        action: 'Collect 12th mark sheet, income certificate, and identity proof',
-        resources: ['Document Checklist', 'Sample Income Certificate'],
-      },
-      {
-        id: 'step3',
-        title: 'Submit Application',
-        description: 'Fill and submit the application form online',
-        action: 'Register on portal and upload documents',
-        resources: ['Application Form', 'Portal Link'],
-      },
-      {
-        id: 'step4',
-        title: 'Track Status',
-        description: 'Monitor your application progress',
-        action: 'Use application ID to check status regularly',
-        resources: ['Status Tracker', 'Contact Support'],
-      },
-    ],
-    'scheme-4': [
-      {
-        id: 'step1',
-        title: 'Get Land Certificate',
-        description: 'Obtain official land ownership documents',
-        action: 'Visit tahsil office and get land certificate',
-        resources: ['Land Certificate Form'],
-      },
-      {
-        id: 'step2',
-        title: 'Register on Portal',
-        description: 'Create account on PM Kisan portal',
-        action: 'Visit pmkisan.gov.in and register with Aadhar',
-        resources: ['Portal Link', 'Registration Guide'],
-      },
-      {
-        id: 'step3',
-        title: 'Verify Details',
-        description: 'Confirm your information with local authorities',
-        action: 'Visit local agricultural office for verification',
-        resources: ['Verification Form'],
-      },
-      {
-        id: 'step4',
-        title: 'Receive Benefits',
-        description: 'Amount transferred to your bank account',
-        action: 'Check bank account for quarterly transfers',
-        resources: ['Bank Details Update Form'],
-      },
-    ],
-  }
-
-  return guidanceMap[schemeId] || []
+export async function fetchGuidanceSteps(schemeId: string): Promise<GuidancePayload | null> {
+  const data = await safeFetch<GuidancePayload>(`/schemes/${schemeId}/guidance`, {
+    method: 'GET',
+  })
+  return data
 }
 
-export async function searchSchemes(query: string): Promise<Scheme[]> {
-  await delay(300)
-
-  const lowerQuery = query.toLowerCase()
-  return mockSchemes.filter(
-    scheme =>
-      scheme.name.toLowerCase().includes(lowerQuery) ||
-      scheme.description.toLowerCase().includes(lowerQuery) ||
-      scheme.category.toLowerCase().includes(lowerQuery)
-  )
+export async function chatWithAssistant(
+  message: string,
+  context: { persona?: string; profile?: Record<string, unknown>; sessionId?: string }
+): Promise<ChatApiResponse | null> {
+  const userId = getOrCreateUserId()
+  return safeFetch<ChatApiResponse>('/chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      message: message || 'Recommend schemes for me',
+      persona: context.persona || null,
+      profile: context.profile || {},
+      session_id: context.sessionId || null,
+      user_id: userId,
+    }),
+  })
 }
 
-export async function getSchemeCategories(): Promise<string[]> {
-  await delay(200)
-  const categories = [...new Set(mockSchemes.map(s => s.category))]
-  return categories
+export async function fetchReadiness(): Promise<ReadyResponse | null> {
+  return safeFetch<ReadyResponse>('/ready', {
+    method: 'GET',
+  })
 }
 
-export async function generateAIResponse(message: string, context: { persona?: string; schemes?: Scheme[] }): Promise<string> {
-  await delay(1000) // Simulate AI processing
+export async function sendOtp(payload: {
+  name: string
+  email: string
+  phone: string
+  purpose: 'signin' | 'signup'
+}): Promise<OtpSendResponse | null> {
+  return safeFetch<OtpSendResponse>('/auth/send-otp', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
 
-  const responses: string[] = [
-    `Based on your profile, I found several eligible schemes for you. Let me help you explore the best options that match your needs.`,
-    `I can see you're interested in ${context.persona || 'your situation'}. Here are the key schemes that might benefit you. Would you like more details about any of them?`,
-    `Great question! I've analyzed available schemes for you. The top recommendations are based on your eligibility criteria and potential benefits.`,
-    `I understand your requirement. These schemes could help you. Would you like me to explain the application process or eligibility criteria for any of them?`,
-    `Based on the latest government programs, here are the schemes that align with your profile. Let me guide you through the benefits and application steps.`,
-  ]
+export async function signInWithOtp(payload: {
+  name: string
+  email: string
+  phone: string
+  otp: string
+}): Promise<AuthResponse | null> {
+  return safeFetch<AuthResponse>('/auth/signin', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
 
-  return responses[Math.floor(Math.random() * responses.length)]
+export async function signUpWithOtp(payload: {
+  name: string
+  email: string
+  phone: string
+  otp: string
+}): Promise<AuthResponse | null> {
+  return safeFetch<AuthResponse>('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function upsertUserProfile(payload: {
+  user_id: string
+  profile: Record<string, unknown>
+  persona?: string | null
+}): Promise<AuthResponse | null> {
+  return safeFetch<AuthResponse>('/users/profile', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function getUserProfile(userId: string): Promise<AuthResponse | null> {
+  return safeFetch<AuthResponse>(`/users/${userId}/profile`, {
+    method: 'GET',
+  })
 }

@@ -14,20 +14,21 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
-import { CheckCircle2, AlertCircle } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 
 interface EligibilityCheckerProps {
   scheme: Scheme | null
   isOpen: boolean
   onClose: () => void
+  onSubmitProfile?: (profile: Record<string, unknown>) => Promise<void> | void
 }
 
-export function EligibilityChecker({ scheme, isOpen, onClose }: EligibilityCheckerProps) {
+export function EligibilityChecker({ scheme, isOpen, onClose, onSubmitProfile }: EligibilityCheckerProps) {
   const [questions, setQuestions] = useState<EligibilityQuestion[]>([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string | boolean>>({})
   const [isLoading, setIsLoading] = useState(false)
-  const [showResult, setShowResult] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (isOpen && scheme) {
@@ -43,7 +44,6 @@ export function EligibilityChecker({ scheme, isOpen, onClose }: EligibilityCheck
       setQuestions(qs)
       setAnswers({})
       setCurrentQuestionIndex(0)
-      setShowResult(false)
     } finally {
       setIsLoading(false)
     }
@@ -63,11 +63,21 @@ export function EligibilityChecker({ scheme, isOpen, onClose }: EligibilityCheck
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1)
-    } else {
-      setShowResult(true)
+      return
+    }
+
+    if (!onSubmitProfile) return
+
+    setIsSubmitting(true)
+    try {
+      const profile = buildProfileFromAnswers(answers)
+      await onSubmitProfile(profile)
+      onClose()
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -77,10 +87,51 @@ export function EligibilityChecker({ scheme, isOpen, onClose }: EligibilityCheck
     }
   }
 
-  const calculateEligibility = () => {
-    const answeredCount = Object.keys(answers).length
-    const percentage = (answeredCount / questions.length) * 100
-    return Math.round(percentage)
+  const parseNumber = (value: string | boolean) => {
+    if (typeof value === 'boolean') return value ? 1 : 0
+    const digits = value.replace(/[^\d]/g, '')
+    const num = Number.parseInt(digits, 10)
+    return Number.isNaN(num) ? null : num
+  }
+
+  const buildProfileFromAnswers = (currentAnswers: Record<string, string | boolean>) => {
+    const profile: Record<string, unknown> = {}
+
+    Object.entries(currentAnswers).forEach(([key, value]) => {
+      switch (key) {
+        case 'q-age': {
+          const age = parseNumber(value)
+          if (age !== null) profile.age = age
+          break
+        }
+        case 'q-income': {
+          const income = parseNumber(value)
+          if (income !== null) profile.annual_income = income
+          break
+        }
+        case 'q-citizen':
+          profile.is_citizen = Boolean(value)
+          break
+        case 'q-edu':
+          profile.is_student = Boolean(value)
+          break
+        case 'q-farm':
+          if (Boolean(value)) profile.occupation = 'farmer'
+          break
+        case 'q-work':
+          if (typeof value === 'string' && value.trim()) {
+            profile.occupation = value.trim().toLowerCase()
+          }
+          break
+        case 'q-disability':
+          profile.is_disabled = Boolean(value)
+          break
+        default:
+          break
+      }
+    })
+
+    return profile
   }
 
   return (
@@ -105,44 +156,6 @@ export function EligibilityChecker({ scheme, isOpen, onClose }: EligibilityCheck
               <p className="text-muted-foreground">Loading eligibility questions...</p>
             </div>
           </div>
-        ) : showResult ? (
-          <div className="space-y-6 py-6">
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="w-8 h-8 text-accent" />
-              </div>
-              <h3 className="text-2xl font-bold text-foreground mb-2">
-                {calculateEligibility()}% Eligible
-              </h3>
-              <p className="text-muted-foreground">
-                Based on your responses, you appear to meet the eligibility criteria for this scheme
-              </p>
-            </div>
-
-            <div className="bg-secondary/20 border border-border rounded-lg p-4">
-              <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-accent" />
-                Next Steps
-              </h4>
-              <ol className="space-y-2 text-sm text-foreground/80">
-                <li>1. Prepare all required documents mentioned above</li>
-                <li>2. Visit the official scheme portal or nearest government office</li>
-                <li>3. Submit your application with supporting documents</li>
-                <li>4. Track your application status online</li>
-              </ol>
-            </div>
-
-            <Button
-              onClick={() => {
-                setShowResult(false)
-                setCurrentQuestionIndex(0)
-              }}
-              variant="outline"
-              className="w-full border-border hover:bg-accent/10"
-            >
-              Retake Quiz
-            </Button>
-          </div>
         ) : questions.length > 0 ? (
           <div className="space-y-6 py-6">
             {/* Progress */}
@@ -164,7 +177,11 @@ export function EligibilityChecker({ scheme, isOpen, onClose }: EligibilityCheck
 
               {currentQuestion?.type === 'yes-no' ? (
                 <RadioGroup
-                  value={String(answers[currentQuestion.id] || '')}
+                  value={
+                    typeof answers[currentQuestion.id] === 'undefined'
+                      ? ''
+                      : String(answers[currentQuestion.id])
+                  }
                   onValueChange={(val) => handleAnswerChange(val === 'true')}
                   className="space-y-3"
                 >
@@ -179,7 +196,7 @@ export function EligibilityChecker({ scheme, isOpen, onClose }: EligibilityCheck
                 </RadioGroup>
               ) : currentQuestion?.type === 'multiple-choice' ? (
                 <RadioGroup
-                  value={String(answers[currentQuestion.id] || '')}
+                  value={String(answers[currentQuestion.id] ?? '')}
                   onValueChange={(val) => handleAnswerChange(val)}
                   className="space-y-3"
                 >
@@ -215,10 +232,14 @@ export function EligibilityChecker({ scheme, isOpen, onClose }: EligibilityCheck
               </Button>
               <Button
                 onClick={handleNext}
-                disabled={!answers[currentQuestion?.id]}
+                disabled={typeof answers[currentQuestion?.id] === 'undefined' || isSubmitting}
                 className="flex-1 bg-primary hover:bg-primary/90"
               >
-                {currentQuestionIndex === questions.length - 1 ? 'Finish' : 'Next'}
+                {isSubmitting
+                  ? 'Submitting...'
+                  : currentQuestionIndex === questions.length - 1
+                    ? 'Finish'
+                    : 'Next'}
               </Button>
             </div>
           </div>

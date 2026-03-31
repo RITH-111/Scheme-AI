@@ -22,9 +22,10 @@ interface GuidanceToolProps {
   scheme: Scheme | null
   isOpen: boolean
   onClose: () => void
+  onAddToChat?: (steps: GuidanceStep[]) => void
 }
 
-export function GuidanceTool({ scheme, isOpen, onClose }: GuidanceToolProps) {
+export function GuidanceTool({ scheme, isOpen, onClose, onAddToChat }: GuidanceToolProps) {
   const [steps, setSteps] = useState<GuidanceStep[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set())
@@ -40,7 +41,7 @@ export function GuidanceTool({ scheme, isOpen, onClose }: GuidanceToolProps) {
     setIsLoading(true)
     try {
       const s = await fetchGuidanceSteps(scheme.id)
-      setSteps(s)
+      setSteps(s?.steps || [])
       setCompletedSteps(new Set())
     } finally {
       setIsLoading(false)
@@ -65,7 +66,7 @@ export function GuidanceTool({ scheme, isOpen, onClose }: GuidanceToolProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-[24px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-accent" />
@@ -89,7 +90,7 @@ export function GuidanceTool({ scheme, isOpen, onClose }: GuidanceToolProps) {
           <div className="space-y-6 py-6">
             {/* Progress */}
             {steps.length > 0 && (
-              <div className="bg-secondary/20 border border-border rounded-lg p-4">
+              <div className="bg-secondary/20 border border-border rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-semibold text-foreground">Your Progress</h4>
                   <Badge className="bg-accent/20 text-accent border-0">
@@ -114,7 +115,7 @@ export function GuidanceTool({ scheme, isOpen, onClose }: GuidanceToolProps) {
                     <AccordionItem
                       key={step.id}
                       value={step.id}
-                      className="border border-border rounded-lg px-4 data-[state=open]:border-accent/50 transition-colors"
+                      className="border border-border rounded-2xl px-4 data-[state=open]:border-accent/50 transition-colors"
                     >
                       <AccordionTrigger
                         onClick={() => toggleStepCompletion(step.id)}
@@ -146,10 +147,10 @@ export function GuidanceTool({ scheme, isOpen, onClose }: GuidanceToolProps) {
                       </AccordionTrigger>
                       <AccordionContent className="px-0 pt-0 pb-4">
                         <div className="ml-12 space-y-4">
-                          <div className="bg-background border border-border rounded-lg p-4">
+                          <div className="bg-background border border-border rounded-2xl p-4">
                             <h5 className="font-semibold text-foreground mb-2">What to do:</h5>
                             <p className="text-sm text-foreground/80 mb-4">
-                              {step.action}
+                              {step.action || step.description}
                             </p>
 
                             {step.resources && step.resources.length > 0 && (
@@ -194,6 +195,26 @@ export function GuidanceTool({ scheme, isOpen, onClose }: GuidanceToolProps) {
                 </p>
               </div>
             )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent/10 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  if (steps.length > 0) {
+                    onAddToChat?.(steps)
+                  }
+                  onClose()
+                }}
+                className="flex-1 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Add to Chat
+              </button>
+            </div>
           </div>
         )}
       </DialogContent>
